@@ -276,7 +276,11 @@ def chat(ctx):
                 click.echo("Goodbye!")
                 break
 
-            response = opt_ctx.orchestrator.interactive_chat(user_input)
+            def approve(sql, reason):
+                click.echo(f"\n[APPROVAL NEEDED]\nReason: {reason}\nSQL:\n{sql}\n")
+                return click.confirm("Run this statement?", default=False)
+
+            response = opt_ctx.orchestrator.interactive_chat(user_input, approval_callback=approve)
             click.echo(f"\nAssistant: {response}\n")
 
     except KeyboardInterrupt:

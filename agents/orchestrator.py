@@ -1,8 +1,10 @@
 """LLM orchestrator for agentic analysis."""
 
+import json
 import logging
+import re
 from typing import List, Dict, Any
-from anthropic import Anthropic
+from anthropic import Anthropic, AuthenticationError
 
 logger = logging.getLogger(__name__)
 
@@ -130,33 +132,105 @@ Be specific, actionable, and data-driven. Provide SQL examples where relevant.""
             logger.error(f"Error getting LLM recommendations: {e}")
             return "Unable to generate LLM recommendations at this time."
 
-    def interactive_chat(self, user_query: str) -> str:
-        """Have an interactive conversation about the analysis."""
-        self.conversation_history.append({
-            "role": "user",
-            "content": user_query
-        })
+    TOOLS = [
+        {
+            "name": "run_readonly_sql",
+            "description": "Run a read-only statement (SELECT, SHOW, DESCRIBE, EXPLAIN) in Snowflake to investigate an issue, e.g. query history, spilling, warehouse load, table clustering.",
+            "input_schema": {"type": "object", "properties": {"sql": {"type": "string"}}, "required": ["sql"]},
+        },
+        {
+            "name": "propose_fix",
+            "description": "Propose a statement that changes Snowflake (ALTER, CREATE, CLUSTER BY, etc.). The user is asked to approve it before it runs. Only call after diagnosing the issue.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"sql": {"type": "string"}, "reason": {"type": "string"}},
+                "required": ["sql", "reason"],
+            },
+        },
+    ]
+
+    READONLY_PREFIXES = ("select", "show", "describe", "desc", "explain", "with")
+    FORBIDDEN_IN_READONLY = ("insert", "update", "delete", "merge", "drop", "alter", "create",
+                             "truncate", "grant", "revoke", "call", "copy", "put", "remove", "use")
+    BLOCKED_FIXES = ("drop database", "drop schema", "drop table", "truncate", "delete", "grant", "revoke")
+
+    CHAT_SYSTEM = """You are an expert Snowflake optimization agent.
+When the user reports a slow query, spill, error or cost problem:
+1. Investigate with run_readonly_sql (e.g. INFORMATION_SCHEMA.QUERY_HISTORY, bytes_spilled_*, warehouse size, EXPLAIN).
+2. State the root cause with evidence.
+3. If a change would fix it, call propose_fix with the exact SQL and the reason. The user approves or rejects it; never assume approval.
+4. After an approved fix runs, verify it and report. If rejected, offer alternatives.
+Prefer the least invasive fix. Be concise."""
+
+    def _is_readonly(self, sql: str) -> bool:
+        cleaned = sql.strip().rstrip(";").strip().lower()
+        if ";" in cleaned or not cleaned.startswith(self.READONLY_PREFIXES):
+            return False
+        words = set(re.findall(r"[a-z_]+", cleaned))
+        return not words.intersection(self.FORBIDDEN_IN_READONLY)
+
+    def _run_tool(self, name: str, args: Dict[str, Any], approval_callback) -> str:
+        connector = self.query_analyzer.connector
+        sql = args.get("sql", "")
+        try:
+            if name == "run_readonly_sql":
+                if not self._is_readonly(sql):
+                    return "Rejected: only a single read-only statement is allowed here. Use propose_fix for changes."
+                rows = connector.execute_query(sql)
+                return json.dumps(rows[:50], default=str)[:8000]
+            if name == "propose_fix":
+                if any(b in sql.lower() for b in self.BLOCKED_FIXES):
+                    return "Rejected: this statement is destructive and not allowed."
+                if approval_callback is None or not approval_callback(sql, args.get("reason", "")):
+                    return "The user REJECTED this change. Do not run it. Suggest alternatives."
+                result = connector.execute_query(sql)
+                return "Executed successfully. " + json.dumps(result[:20], default=str)[:2000]
+            return f"Unknown tool {name}"
+        except Exception as e:
+            return f"Tool error: {e}"
+
+    def interactive_chat(self, user_query: str, approval_callback=None, max_steps: int = 8) -> str:
+        """Agentic chat: investigates issues and applies fixes only after approval.
+
+        approval_callback(sql, reason) -> bool must return True to allow execution.
+        """
+        start_len = len(self.conversation_history)
+        self.conversation_history.append({"role": "user", "content": user_query})
 
         try:
-            response = self.client.messages.create(
-                model=self.config.model,
-                max_tokens=self.config.max_tokens,
-                system="""You are an expert Snowflake database optimization consultant.
-Answer questions about Snowflake query optimization, cost reduction, and performance tuning.
-Provide specific, actionable advice with examples.""",
-                messages=self.conversation_history
-            )
+            for _ in range(max_steps):
+                response = self.client.messages.create(
+                    model=self.config.model,
+                    max_tokens=self.config.max_tokens,
+                    system=self.CHAT_SYSTEM,
+                    tools=self.TOOLS,
+                    messages=self.conversation_history,
+                )
+                self.conversation_history.append({
+                    "role": "assistant",
+                    "content": [b.model_dump(exclude_none=True) for b in response.content],
+                })
 
-            assistant_message = self._extract_text_from_response(response)
-            self.conversation_history.append({
-                "role": "assistant",
-                "content": assistant_message
-            })
+                tool_uses = [b for b in response.content if b.type == "tool_use"]
+                if not tool_uses:
+                    return self._extract_text_from_response(response)
 
-            return assistant_message
+                results = [{
+                    "type": "tool_result",
+                    "tool_use_id": t.id,
+                    "content": self._run_tool(t.name, t.input, approval_callback),
+                } for t in tool_uses]
+                self.conversation_history.append({"role": "user", "content": results})
+
+            return "Stopped after reaching the step limit. Ask me to continue."
+        except AuthenticationError:
+            logger.error("Anthropic authentication failed")
+            del self.conversation_history[start_len:]
+            return "Authentication failed: ANTHROPIC_API_KEY is invalid. Update it and restart."
         except Exception as e:
             logger.error(f"Error in interactive chat: {e}")
-            return "Sorry, I encountered an error. Please try again."
+            del self.conversation_history[start_len:]
+            return f"Sorry, I encountered an error: {e}"
 
     def _generate_summary(self, insights: Dict[str, Any], recommendations: str) -> Dict[str, Any]:
         """Generate executive summary."""
