@@ -229,6 +229,9 @@ Prefer the least invasive fix. Be concise."""
             return "Authentication failed: ANTHROPIC_API_KEY is invalid. Update it and restart."
         except Exception as e:
             logger.error(f"Error in interactive chat: {e}")
+            if "credit balance is too low" in str(e):
+                del self.conversation_history[start_len:]
+                return "Anthropic credit balance is too low. Add credits under Plans & Billing in the Anthropic Console, then retry."
             del self.conversation_history[start_len:]
             return f"Sorry, I encountered an error: {e}"
 
