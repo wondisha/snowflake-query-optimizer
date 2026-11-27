@@ -67,8 +67,7 @@ class SnowflakeConnector:
             rows_produced,
             execution_status,
             start_time,
-            end_time,
-            credits_used
+            end_time
         FROM snowflake.account_usage.query_history
         WHERE start_time >= CURRENT_TIMESTAMP - INTERVAL '{hours_back} hours'
         ORDER BY start_time DESC
