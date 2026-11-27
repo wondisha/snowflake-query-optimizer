@@ -160,11 +160,8 @@ class SnowflakeConnector:
         query = f"""
         SELECT
             table_name,
-            clustering_key,
-            bytes_scanned,
-            bytes_scanned_by_subquery_predicate,
-            bytes_scanned_by_external_predicate
-        FROM snowflake.account_usage.tables
+            table_schema
+        FROM information_schema.tables
         WHERE table_name = '{table_name}'
         """
         results = self.execute_query(query)
