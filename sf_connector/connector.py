@@ -68,8 +68,6 @@ class SnowflakeConnector:
             execution_status,
             start_time,
             end_time,
-            queue_time,
-            compilation_time,
             credits_used
         FROM snowflake.account_usage.query_history
         WHERE start_time >= CURRENT_TIMESTAMP - INTERVAL '{hours_back} hours'
