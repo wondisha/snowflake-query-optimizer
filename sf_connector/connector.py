@@ -63,7 +63,7 @@ class SnowflakeConnector:
             query_type,
             execution_time,
             total_elapsed_time,
-            rows_scanned,
+            bytes_scanned as rows_scanned,
             rows_produced,
             execution_status,
             start_time,
