@@ -113,12 +113,12 @@ class LLMOrchestrator:
         if slow_queries:
             context += f"**Slow Queries Found: {len(slow_queries)}**\n"
             for q in slow_queries[:3]:
-                context += f"- Query: {q.get('query_id', 'N/A')} ({q.get('execution_time_seconds', 0)}s)\n"
+                context += f"- Query: {q.query_id} - {q.description}\n"
 
         if expensive_queries:
             context += f"\n**Expensive Queries Found: {len(expensive_queries)}**\n"
             for q in expensive_queries[:3]:
-                context += f"- Query: {q.get('query_id', 'N/A')} (${q.get('cost', 0):.2f} per run)\n"
+                context += f"- Query: {q.query_id} - {q.description}\n"
 
         # Schema issues
         schema_data = insights.get("schema_insights", {})
@@ -128,12 +128,12 @@ class LLMOrchestrator:
         if table_issues:
             context += f"\n**Table Optimization Opportunities: {len(table_issues)}**\n"
             for t in table_issues[:3]:
-                context += f"- Table: {t.get('table_name', 'N/A')} ({t.get('size_gb', 0)}GB)\n"
+                context += f"- Table: {t.table_name} - {t.description}\n"
 
         if clustering_issues:
             context += f"\n**Clustering Opportunities: {len(clustering_issues)}**\n"
             for c in clustering_issues[:3]:
-                context += f"- Table: {c.get('table_name', 'N/A')} - Suggested keys: {c.get('recommended_keys', 'N/A')}\n"
+                context += f"- Table: {c.table_name} - {c.recommendation}\n"
 
         # Cost data
         cost_data = insights.get("cost_insights", {})
