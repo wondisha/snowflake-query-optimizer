@@ -97,9 +97,11 @@ class CostAnalyzer:
             top_cost = top_query.get("credits_used", 0)
             other_cost = total_cost - top_cost
 
+            cost_percentage = (top_cost/total_cost*100) if total_cost > 0 else 0
+
             opt = CostOptimization(
                 category="query_optimization",
-                issue=f"Top query alone costs {top_cost/total_cost*100:.1f}% of these queries' total cost",
+                issue=f"Top query alone costs {cost_percentage:.1f}% of these queries' total cost",
                 current_cost=total_cost * self.credit_price,
                 potential_savings=(top_cost * 0.5) * self.credit_price,  # 50% improvement potential
                 savings_percentage=50.0,
