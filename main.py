@@ -259,7 +259,7 @@ def workload_analysis(ctx):
 @cli.command()
 @click.pass_context
 def chat(ctx):
-    """Interactive chat about Snowflake optimization."""
+    """Interactive chat with AI about Snowflake optimization (runs analysis first)."""
     opt_ctx = ctx.obj['context']
 
     if not opt_ctx.initialize():
@@ -267,20 +267,36 @@ def chat(ctx):
         return
 
     try:
-        click.echo("\n[BOT] SNOWFLAKE OPTIMIZATION CHATBOT")
-        click.echo("Type 'exit' to quit.\n")
+        # Run analysis first to provide context
+        click.echo("\n[BOT] 🤖 SNOWFLAKE OPTIMIZATION CHATBOT")
+        click.echo("[BOT] Running initial database analysis for context...\n")
+
+        with click.progressbar(length=100, label='[ANALYZE]') as bar:
+            analysis_results = opt_ctx.orchestrator.analyze_comprehensive()
+            bar.update(100)
+
+        # Store analysis in orchestrator for chat context
+        opt_ctx.orchestrator.last_analysis = analysis_results
+
+        click.echo("[BOT] ✅ Analysis complete! Ask me specific questions about your database.\n")
+        click.echo("[BOT] Examples:")
+        click.echo("  - 'What are my top 3 optimization priorities?'")
+        click.echo("  - 'Show me SQL to optimize slow queries'")
+        click.echo("  - 'How much can I save per month?'")
+        click.echo("  - 'Which tables need clustering keys?'")
+        click.echo("\nType 'exit' to quit.\n")
 
         while True:
             user_input = click.prompt("You")
             if user_input.lower() in ['exit', 'quit', 'bye']:
-                click.echo("Goodbye!")
+                click.echo("[BOT] Goodbye! Remember to implement those optimizations! 🚀")
                 break
 
             response = opt_ctx.orchestrator.interactive_chat(user_input)
             click.echo(f"\nAssistant: {response}\n")
 
     except KeyboardInterrupt:
-        click.echo("\n\nExiting...")
+        click.echo("\n\n[BOT] Session interrupted. Goodbye!")
     except Exception as e:
         click.echo(f"[ERROR] Chat error: {e}", err=True)
     finally:

@@ -19,6 +19,7 @@ class LLMOrchestrator:
         self.workload_analyzer = workload_analyzer
         self.client = Anthropic(api_key=config.api_key)
         self.conversation_history = []
+        self.last_analysis = None  # Store analysis for chat context
 
     def analyze_comprehensive(self) -> Dict[str, Any]:
         """Perform comprehensive analysis and provide recommendations."""
@@ -94,6 +95,69 @@ class LLMOrchestrator:
         # If no text block found, return empty string
         return ""
 
+    def _prepare_analysis_context(self) -> str:
+        """Prepare analysis context for chat."""
+        if not self.last_analysis:
+            return "No prior analysis available."
+
+        insights = self.last_analysis.get("raw_insights", {})
+        recommendations = self.last_analysis.get("llm_recommendations", "")
+
+        context = "## Current Database Analysis:\n\n"
+
+        # Query issues
+        query_data = insights.get("query_insights", {})
+        slow_queries = query_data.get("slow_queries", [])
+        expensive_queries = query_data.get("expensive_queries", [])
+
+        if slow_queries:
+            context += f"**Slow Queries Found: {len(slow_queries)}**\n"
+            for q in slow_queries[:3]:
+                context += f"- Query: {q.get('query_id', 'N/A')} ({q.get('execution_time_seconds', 0)}s)\n"
+
+        if expensive_queries:
+            context += f"\n**Expensive Queries Found: {len(expensive_queries)}**\n"
+            for q in expensive_queries[:3]:
+                context += f"- Query: {q.get('query_id', 'N/A')} (${q.get('cost', 0):.2f} per run)\n"
+
+        # Schema issues
+        schema_data = insights.get("schema_insights", {})
+        table_issues = schema_data.get("table_structures", [])
+        clustering_issues = schema_data.get("clustering", [])
+
+        if table_issues:
+            context += f"\n**Table Optimization Opportunities: {len(table_issues)}**\n"
+            for t in table_issues[:3]:
+                context += f"- Table: {t.get('table_name', 'N/A')} ({t.get('size_gb', 0)}GB)\n"
+
+        if clustering_issues:
+            context += f"\n**Clustering Opportunities: {len(clustering_issues)}**\n"
+            for c in clustering_issues[:3]:
+                context += f"- Table: {c.get('table_name', 'N/A')} - Suggested keys: {c.get('recommended_keys', 'N/A')}\n"
+
+        # Cost data
+        cost_data = insights.get("cost_insights", {})
+        weekly_savings = cost_data.get("total_potential_savings", 0)
+        annual_savings = cost_data.get("total_potential_savings_annual", 0)
+
+        if weekly_savings > 0:
+            context += f"\n**Cost Optimization Potential:**\n"
+            context += f"- Weekly Savings: ${weekly_savings:.2f}\n"
+            context += f"- Annual Savings: ${annual_savings:.2f}\n"
+
+        # Workload patterns
+        workload_data = insights.get("workload_insights", {})
+        if workload_data.get("high_impact_patterns"):
+            context += f"\n**High Impact Patterns:**\n"
+            for p in workload_data.get("high_impact_patterns", [])[:3]:
+                context += f"- {p}\n"
+
+        # Include LLM recommendations summary
+        if recommendations:
+            context += f"\n**AI Recommendations Summary:**\n{recommendations[:500]}...\n"
+
+        return context
+
     def _get_llm_recommendations(self, analysis_summary: str) -> str:
         """Get LLM recommendations based on analysis."""
         system_prompt = """You are an expert Snowflake database optimization consultant.
@@ -131,19 +195,43 @@ Be specific, actionable, and data-driven. Provide SQL examples where relevant.""
             return "Unable to generate LLM recommendations at this time."
 
     def interactive_chat(self, user_query: str) -> str:
-        """Have an interactive conversation about the analysis."""
+        """Have an interactive conversation about the analysis with context."""
         self.conversation_history.append({
             "role": "user",
             "content": user_query
         })
 
         try:
+            # Build system prompt with analysis context
+            system_prompt = """You are an expert Snowflake database optimization consultant.
+You have access to analysis results from their database and should provide SPECIFIC, ACTIONABLE solutions.
+
+**RESPONSE GUIDELINES:**
+1. Always provide concrete SQL examples or implementation steps
+2. Quantify impact (cost savings, performance improvement, time to implement)
+3. Prioritize by business impact - highest ROI first
+4. If asked about issues, provide exact SQL to fix them
+5. Include before/after scenarios
+6. Be direct and practical, not theoretical
+
+**RESPONSE FORMAT:**
+- Problem: [specific issue]
+- Root Cause: [why it's happening]
+- Solution: [exact SQL or steps]
+- Impact: [quantified benefit]
+- Time to Implement: [estimate]
+
+NEVER just describe problems - ALWAYS provide solutions with SQL when applicable."""
+
+            # Add analysis context if available
+            if self.last_analysis:
+                context = self._prepare_analysis_context()
+                system_prompt += f"\n\n**ANALYSIS DATA FOR REFERENCE:**\n{context}"
+
             response = self.client.messages.create(
                 model=self.config.model,
                 max_tokens=self.config.max_tokens,
-                system="""You are an expert Snowflake database optimization consultant.
-Answer questions about Snowflake query optimization, cost reduction, and performance tuning.
-Provide specific, actionable advice with examples.""",
+                system=system_prompt,
                 messages=self.conversation_history
             )
 
