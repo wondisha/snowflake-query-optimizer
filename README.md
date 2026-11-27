@@ -21,7 +21,17 @@ An intelligent, agentic AI system for comprehensive Snowflake database analysis,
 
 ## 📋 Quick Start
 
-### 1. Installation
+### Option A: Docker (Recommended for Production)
+
+The easiest way to run - no Python installation issues:
+
+```bash
+docker-compose run -it snowflake-optimizer python main.py chat
+```
+
+See [DOCKER_SETUP.md](DOCKER_SETUP.md) for detailed instructions.
+
+### Option B: Local Installation
 
 ```bash
 cd snowflake_query_optimizer
@@ -340,9 +350,28 @@ For issues or questions:
 2. Verify credentials: `python main.py health-check`
 3. Review Snowflake account permissions (requires ACCOUNTADMIN role for QUERY_HISTORY)
 
-## 📄 License
+## 📄 Documentation
 
-MIT License - See LICENSE file for details
+- **[CHANGELOG.md](CHANGELOG.md)** - Release notes and version history
+- **[SECURITY.md](SECURITY.md)** - Security best practices and production deployment
+- **[DOCKER_SETUP.md](DOCKER_SETUP.md)** - Docker containerization guide
+- **[LICENSE](LICENSE)** - MIT License
+- **[VERSION](VERSION)** - Current version (v1.0.0)
+
+## 🚀 Deployment
+
+### Production Checklist
+See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for pre-release verification.
+
+### Secure Deployment
+Follow [SECURITY.md](SECURITY.md) for:
+- Credential management strategies
+- Production deployment options (Azure Key Vault, Snowflake key-pair auth)
+- Incident response procedures
+
+## 📌 License
+
+MIT License - See [LICENSE](LICENSE) file for details
 
 ---
 
