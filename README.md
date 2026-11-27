@@ -39,12 +39,12 @@ cp .env.example .env
 Edit `.env` with your credentials:
 
 ```env
-SNOWFLAKE_ACCOUNT=UCNMZXT-FZ98137
-SNOWFLAKE_USER=WONDI
-SNOWFLAKE_PASSWORD=Snwe@73792026gabi
-SNOWFLAKE_DATABASE=GOVERNANCE
+SNOWFLAKE_ACCOUNT=your_account_id
+SNOWFLAKE_USER=your_username
+SNOWFLAKE_PASSWORD=your_password
+SNOWFLAKE_DATABASE=your_database
 SNOWFLAKE_WAREHOUSE=COMPUTE_WH
-ANTHROPIC_API_KEY=sk-ant-usr-1bRH-readme
+ANTHROPIC_API_KEY=your_anthropic_api_key
 ```
 
 ### 3. Run Analysis
@@ -270,10 +270,18 @@ tail -f snowflake_optimizer.log
 
 ## 🔐 Security
 
-- Credentials stored in `.env` (not version controlled)
-- Never commit `.env` file
+### Credential Management (IMPORTANT)
+- ⚠️ **Never commit** `.env` file to version control
+- ✅ `.env` is listed in `.gitignore` and won't be tracked
+- ✅ Always use `.env.example` as your template
+- ✅ Regenerate credentials if ever exposed
+
+### Best Practices
 - Snowflake connections use encrypted authentication
-- API keys stored securely
+- API keys stored securely in environment variables only
+- For production: Use Snowflake key-pair authentication (not password)
+- Rotate credentials regularly
+- Use separate Snowflake users per environment (dev/staging/prod)
 
 ## 🤝 Integration
 
