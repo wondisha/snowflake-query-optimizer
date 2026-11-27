@@ -65,3 +65,13 @@ test_*.py
 find_model.py
 list_models.py
 verify_all.py
+
+# Executables
+*.exe
+python-*.exe
+python-installer.exe
+
+# Build artifacts
+*.zip
+*.tar.gz
+*.tar
