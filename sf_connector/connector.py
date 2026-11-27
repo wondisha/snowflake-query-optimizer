@@ -102,10 +102,7 @@ class SnowflakeConnector:
         SELECT
             warehouse_name,
             DATE_TRUNC('HOUR', start_time) as hour,
-            SUM(credits_used) as credits_used,
-            SUM(compute_provisioned_time) as compute_time,
-            SUM(query_provisioned_time) as query_time,
-            SUM(waiting_provisioned_time) as waiting_time
+            SUM(credits_used) as credits_used
         FROM snowflake.account_usage.warehouse_metering_history
         WHERE start_time >= CURRENT_TIMESTAMP - INTERVAL '{hours_back} hours'
         GROUP BY warehouse_name, DATE_TRUNC('HOUR', start_time)
